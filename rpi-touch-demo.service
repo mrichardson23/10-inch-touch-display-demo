@@ -1,0 +1,17 @@
+[Unit]
+Description=Raspberry Pi 10-Inch Touch Display 2 Native Demo
+After=graphical-session.target labwc.service
+
+[Service]
+Type=simple
+Environment=PYTHONUNBUFFERED=1
+Environment=WAYLAND_DISPLAY=wayland-0
+Environment=XDG_RUNTIME_DIR=/run/user/1000
+Environment=DISPLAY=:0
+WorkingDirectory=/home/pi/rpi-touch-demo
+ExecStart=/usr/bin/python3 /home/pi/rpi-touch-demo/main.py
+Restart=always
+RestartSec=3
+
+[Install]
+WantedBy=graphical-session.target

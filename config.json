@@ -1,0 +1,13 @@
+{
+  "header_title": "Raspberry Pi's new 10-inch Touch Display 2",
+  "header_subtitle": "1200×1920 • 10-Point Multi-Touch Capacitive Display",
+  "idle_cta_text": "TOUCH THE SCREEN WITH UP TO 10 FINGERS",
+  "hud_touch_label": "TOUCH POINTS",
+  "hud_mode_idle_text": "MODE: DEMO IDLE",
+  "hud_mode_interactive_text": "MODE: MULTI-TOUCH INTERACTIVE",
+  "touch_badge_label": "FINGER #{slot} ({x}, {y})",
+  "primary_logo": "MFH.png",
+  "active_logos": ["MFH.png", "logo.png"],
+  "idle_timeout_seconds": 4.0,
+  "admin_port": 8080
+}
