@@ -8,6 +8,10 @@
   "touch_badge_label": "FINGER #{slot} ({x}, {y})",
   "primary_logo": "MFH.png",
   "active_logos": ["MFH.png", "logo.png"],
+  "logo_scales": {
+    "MFH.png": 1.0,
+    "logo.png": 1.0
+  },
   "idle_timeout_seconds": 4.0,
   "admin_port": 8080
 }

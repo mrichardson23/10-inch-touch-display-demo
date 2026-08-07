@@ -7,7 +7,8 @@ class AssetManager:
     def __init__(self, width=1200, height=1920):
         self.width = width
         self.height = height
-        self.loaded_logos = {} # filename -> {'large': Surface, 'medium': Surface, 'small': Surface}
+        self.raw_images = {} # filename -> Surface (original convert_alpha)
+        self.scaled_cache = {} # (filename, variant, scale_mult) -> Surface
         self.glow_circle_surfs = {}
         self.fonts = {}
 
@@ -43,55 +44,60 @@ class AssetManager:
         return png_files
 
     def preload_all_available_images(self):
-        """Preload and smoothscale all PNG files in directory into large, medium, and small variants."""
+        """Preload all PNG files in directory."""
         available = self.get_available_image_files()
         for filename in available:
-            self.load_image_asset(filename)
+            self.load_raw_image_asset(filename)
         
-        if "default_rpi" not in self.loaded_logos:
-            large_fallback = self.create_raspberry_logo(size=240)
-            medium_fallback = self.create_raspberry_logo(size=150)
-            small_fallback = self.create_raspberry_logo(size=85)
-            self.loaded_logos["default_rpi"] = {'large': large_fallback, 'medium': medium_fallback, 'small': small_fallback}
+        if "default_rpi" not in self.raw_images:
+            self.raw_images["default_rpi"] = self.create_raspberry_logo(size=240)
 
-    def load_image_asset(self, filename):
-        """Load single image file with large (240px), medium (150px), and small (85px) variants."""
+    def load_raw_image_asset(self, filename):
+        """Load single raw image file."""
         base_dir = os.path.dirname(os.path.abspath(__file__))
         img_path = os.path.join(base_dir, filename)
         if os.path.exists(img_path):
             try:
                 img = pygame.image.load(img_path).convert_alpha()
-                w, h = img.get_size()
-                
-                # Large (Primary) variant (240px max)
-                scale_l = 240.0 / max(w, h)
-                large_surf = pygame.transform.smoothscale(img, (max(1, int(w * scale_l)), max(1, int(h * scale_l))))
-                
-                # Medium (Secondary) variant (150px max)
-                scale_m = 150.0 / max(w, h)
-                medium_surf = pygame.transform.smoothscale(img, (max(1, int(w * scale_m)), max(1, int(h * scale_m))))
-                
-                # Small (Header) variant (85px max)
-                scale_s = 85.0 / max(w, h)
-                small_surf = pygame.transform.smoothscale(img, (max(1, int(w * scale_s)), max(1, int(h * scale_s))))
-                
-                self.loaded_logos[filename] = {'large': large_surf, 'medium': medium_surf, 'small': small_surf}
-                print(f"[AssetManager] Loaded image asset '{filename}' ({w}x{h} -> L:{large_surf.get_size()}, M:{medium_surf.get_size()}, S:{small_surf.get_size()})")
-                return
+                self.raw_images[filename] = img
+                print(f"[AssetManager] Loaded raw image asset '{filename}' ({img.get_width()}x{img.get_height()})")
+                return img
             except Exception as e:
                 print(f"[AssetManager] Error loading image {filename}: {e}")
+        return None
 
-    def get_logo_surface(self, filename, variant='large'):
-        """Return cached logo surface variant ('large', 'medium', or 'small')."""
-        if filename in self.loaded_logos:
-            return self.loaded_logos[filename][variant]
+    def get_logo_surface(self, filename, variant='large', scale_mult=1.0):
+        """Return cached logo surface with custom scale multiplier."""
+        # Ensure scale_mult is float and rounded for caching
+        try:
+            scale_mult = round(float(scale_mult), 2)
+        except Exception:
+            scale_mult = 1.0
+
+        scale_mult = max(0.2, min(3.0, scale_mult))
+        cache_key = (filename, variant, scale_mult)
         
-        self.load_image_asset(filename)
-        if filename in self.loaded_logos:
-            return self.loaded_logos[filename][variant]
+        if cache_key in self.scaled_cache:
+            return self.scaled_cache[cache_key]
+
+        # Check if raw image is loaded
+        if filename not in self.raw_images:
+            img = self.load_raw_image_asset(filename)
+            if not img:
+                filename = "default_rpi"
+
+        img = self.raw_images.get(filename) or self.raw_images.get("default_rpi")
+        w, h = img.get_size()
         
-        first_key = list(self.loaded_logos.keys())[0] if self.loaded_logos else "default_rpi"
-        return self.loaded_logos[first_key][variant]
+        base_target = 240.0 if variant == 'large' else (150.0 if variant == 'medium' else 85.0)
+        target_max = base_target * scale_mult
+
+        scale = target_max / max(w, h)
+        new_w, new_h = max(1, int(w * scale)), max(1, int(h * scale))
+
+        scaled_surf = pygame.transform.smoothscale(img, (new_w, new_h))
+        self.scaled_cache[cache_key] = scaled_surf
+        return scaled_surf
 
     def create_raspberry_logo(self, size=200):
         """Programmatically generate fallback vector Raspberry Pi logo."""

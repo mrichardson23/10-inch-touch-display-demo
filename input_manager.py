@@ -42,11 +42,12 @@ class TouchPoint:
         self.last_update = time.time()
 
 class InputManager:
-    def __init__(self, screen_w=1200, screen_h=1920, admin_key_callback=None):
+    def __init__(self, screen_w=1200, screen_h=1920, admin_key_callback=None, minimize_callback=None):
         self.screen_w = screen_w
         self.screen_h = screen_h
         self.lock = threading.Lock()
         self.admin_key_callback = admin_key_callback
+        self.minimize_callback = minimize_callback
         self.active_slots = {}
         self.mouse_sim_id = "mouse_sim"
         self.mouse_active = False
@@ -129,7 +130,7 @@ class InputManager:
         t.start()
 
     def start_evdev_keyboard_reader(self):
-        """Read hardware keyboard key events directly from /dev/input for dedicated KEY_F1."""
+        """Read hardware keyboard key events directly from /dev/input for TAB, F1, A, C, ESC."""
         def kbd_thread():
             try:
                 import evdev
@@ -141,24 +142,30 @@ class InputManager:
                         dev = evdev.InputDevice(path)
                         caps = dev.capabilities()
                         if ecodes.EV_KEY in caps:
-                            key_codes = [k[0] if isinstance(k, tuple) else k for k in caps[ecodes.EV_KEY]]
-                            if ecodes.KEY_F1 in key_codes:
-                                kbd_devices.append(dev)
-                                print(f"[InputManager] Hooked Hardware Keyboard: {dev.name} ({dev.path})")
+                            kbd_devices.append(dev)
+                            print(f"[InputManager] Hooked Hardware Keyboard: {dev.name} ({dev.path})")
                     except Exception:
                         continue
 
                 for kbd in kbd_devices:
                     def listen_device(dev):
                         for event in dev.read_loop():
-                            if event.type == ecodes.EV_KEY and event.value == 1:
-                                if event.code == ecodes.KEY_F1:
-                                    print(f"[InputManager] F1 Key pressed on hardware keyboard ({event.code})")
+                            if event.type == ecodes.EV_KEY and event.value == 1: # Key down
+                                if event.code in [ecodes.KEY_TAB, ecodes.KEY_F1, ecodes.KEY_A, ecodes.KEY_C]:
+                                    print(f"[InputManager] Admin shortcut key pressed on keyboard ({event.code})")
                                     if self.admin_key_callback:
                                         try:
                                             self.admin_key_callback()
                                         except Exception as e:
                                             print(f"[InputManager] Error in admin_key_callback: {e}")
+
+                                elif event.code in [ecodes.KEY_ESC, ecodes.KEY_Q]:
+                                    print(f"[InputManager] Minimize key pressed on keyboard ({event.code})")
+                                    if self.minimize_callback:
+                                        try:
+                                            self.minimize_callback()
+                                        except Exception as e:
+                                            print(f"[InputManager] Error in minimize_callback: {e}")
 
                     threading.Thread(target=listen_device, args=(kbd,), daemon=True).start()
 
@@ -172,8 +179,10 @@ class InputManager:
         """Process Pygame SDL mouse and keyboard events safely."""
         with self.lock:
             if event.type == pygame.KEYDOWN:
-                admin_keys = [pygame.K_TAB, pygame.K_F1, pygame.K_a]
-                if event.key in admin_keys:
+                if event.key in [pygame.K_ESCAPE, pygame.K_q]:
+                    if self.minimize_callback:
+                        self.minimize_callback()
+                elif event.key in [pygame.K_TAB, pygame.K_F1, pygame.K_a, pygame.K_c]:
                     if self.admin_key_callback:
                         try:
                             self.admin_key_callback()

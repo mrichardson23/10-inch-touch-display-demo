@@ -160,7 +160,7 @@ class EffectEngine:
             surface.blit(wave_surf, (0, int(wave_y - 120)))
 
     def draw_idle_mode(self, surface, config):
-        """Draw dazzling idle showcase with orbiting active logo images (without connecting line)."""
+        """Draw dazzling idle showcase with orbiting active logo images and particle effects around the primary logo."""
         t = self.bg_time
 
         # Ambient background stars
@@ -173,8 +173,11 @@ class EffectEngine:
         cx = self.width / 2
         cy = self.height * 0.42
 
+        # Primary and active logos configuration
         primary_logo = config.get("primary_logo", "MFH.png")
         active_logos = config.get("active_logos", ["MFH.png", "logo.png"])
+        logo_scales = config.get("logo_scales", {})
+
         if not isinstance(active_logos, list) or len(active_logos) == 0:
             active_logos = [primary_logo]
 
@@ -185,9 +188,9 @@ class EffectEngine:
             active_logos.insert(0, primary_logo)
 
         N = len(active_logos)
+        primary_pos = (cx, cy)
 
         if N >= 2:
-            # Multi-logo orbiting double-helix animation
             radius_x = 180.0
             radius_y = 90.0
             
@@ -197,42 +200,52 @@ class EffectEngine:
                 lx = cx + radius_x * math.cos(angle)
                 ly = cy + radius_y * math.sin(angle) + math.sin(t * 2.0 + idx) * 15.0
                 is_primary = (logo_name == primary_logo)
+                if is_primary:
+                    primary_pos = (lx, ly)
                 positions.append((lx, ly, logo_name, idx, is_primary))
 
-            # Draw each orbiting logo freely (connecting line removed as requested)
+            # Ensure Primary Graphic is always layered ON TOP of all other orbiting graphics (rendered last)
+            positions.sort(key=lambda p: 1 if p[4] else 0)
+
+            # Draw each orbiting logo in layer order
             for lx, ly, logo_name, idx, is_primary in positions:
                 hue = (t * 0.15 + idx / N) % 1.0
                 sr, sg, sb = [int(c * 255) for c in colorsys.hsv_to_rgb(hue, 0.9, 1.0)]
                 
-                glow_radius = 130 if is_primary else 85
+                scale_mult = logo_scales.get(logo_name, 1.0)
+                glow_radius = int((130 if is_primary else 85) * scale_mult)
                 variant = 'large' if is_primary else 'medium'
 
                 glow = self.assets.get_glow_circle(glow_radius, (sr, sg, sb))
                 surface.blit(glow, (int(lx - glow_radius), int(ly - glow_radius)))
 
-                logo_surf = self.assets.get_logo_surface(logo_name, variant=variant)
+                logo_surf = self.assets.get_logo_surface(logo_name, variant=variant, scale_mult=scale_mult)
                 rect = logo_surf.get_rect(center=(int(lx), int(ly)))
                 surface.blit(logo_surf, rect)
 
         else:
             logo_name = primary_logo
+            scale_mult = logo_scales.get(logo_name, 1.0)
             fy = cy + math.sin(t * 1.8) * 20.0
+            primary_pos = (cx, fy)
 
-            for i in range(3):
-                orbit_angle = t * (1.2 + i * 0.4) + i * (math.pi * 2 / 3)
-                sat_x = cx + 180 * math.cos(orbit_angle)
-                sat_y = fy + 60 * math.sin(orbit_angle)
-                sat_hue = (t * 0.2 + i * 0.33) % 1.0
-                sr, sg, sb = [int(c * 255) for c in colorsys.hsv_to_rgb(sat_hue, 0.9, 1.0)]
-                glow = self.assets.get_glow_circle(45, (sr, sg, sb))
-                surface.blit(glow, (int(sat_x - 45), int(sat_y - 45)))
+            logo_glow = self.assets.get_glow_circle(int(140 * scale_mult), (227, 11, 93))
+            surface.blit(logo_glow, (int(cx - 140 * scale_mult), int(fy - 140 * scale_mult)))
 
-            logo_glow = self.assets.get_glow_circle(140, (227, 11, 93))
-            surface.blit(logo_glow, (int(cx - 140), int(fy - 140)))
-
-            logo_surf = self.assets.get_logo_surface(logo_name, variant='large')
+            logo_surf = self.assets.get_logo_surface(logo_name, variant='large', scale_mult=scale_mult)
             rect = logo_surf.get_rect(center=(int(cx), int(fy)))
             surface.blit(logo_surf, rect)
+
+        # Orbiting satellite light particles around Primary Logo
+        pkx, pky = primary_pos
+        for i in range(3):
+            orbit_angle = t * (1.5 + i * 0.4) + i * (math.pi * 2 / 3)
+            sat_x = pkx + 160 * math.cos(orbit_angle)
+            sat_y = pky + 65 * math.sin(orbit_angle)
+            sat_hue = (t * 0.2 + i * 0.33) % 1.0
+            sr, sg, sb = [int(c * 255) for c in colorsys.hsv_to_rgb(sat_hue, 0.9, 1.0)]
+            glow = self.assets.get_glow_circle(42, (sr, sg, sb))
+            surface.blit(glow, (int(sat_x - 42), int(sat_y - 42)))
 
         cta_text = config.get("idle_cta_text", "TOUCH THE SCREEN WITH UP TO 10 FINGERS")
         pulse = int(200 + 55 * math.sin(t * 4))
@@ -314,7 +327,9 @@ class EffectEngine:
         pygame.draw.rect(header_card, (227, 11, 93, 180), header_card.get_rect(), width=2, border_radius=20)
 
         primary_logo = config.get("primary_logo", "MFH.png")
-        small_logo = self.assets.get_logo_surface(primary_logo, variant='small')
+        
+        # Use standard fixed scale_mult=1.0 for header card logo
+        small_logo = self.assets.get_logo_surface(primary_logo, variant='small', scale_mult=1.0)
         if small_logo:
             header_card.blit(small_logo, (20, (card_h - small_logo.get_height()) // 2))
 
@@ -350,7 +365,7 @@ class EffectEngine:
             toast_surf = pygame.Surface((toast_w, toast_h), pygame.SRCALPHA)
             pygame.draw.rect(toast_surf, (16, 185, 129, 235), toast_surf.get_rect(), border_radius=16)
             
-            txt1 = self.assets.font_badge.render("🍓 LAUNCHING ADMIN PANEL AT: http://192.168.86.156:8080", True, (255, 255, 255))
+            txt1 = self.assets.font_badge.render("LAUNCHING ADMIN PANEL AT: http://192.168.86.156:8080", True, (255, 255, 255))
             toast_surf.blit(txt1, ((toast_w - txt1.get_width()) // 2, (toast_h - txt1.get_height()) // 2))
             
             surface.blit(toast_surf, ((self.width - toast_w) // 2, self.height // 2 - 35))
